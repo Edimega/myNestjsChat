@@ -1,14 +1,21 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { UserModule } from './Users/user.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
+import { User } from './TypeOrm/user.entity';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot({
-      ttl: 60, // Tiempo de vida de las peticiones en segundos
-      limit: 10, // Número máximo de peticiones permitidas por minuto
+    ConfigModule.forRoot(),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      entities: [User],
+      synchronize: true,
     }),
+    UserModule
   ],
   controllers: [AppController],
   providers: [AppService],

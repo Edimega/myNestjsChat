@@ -1,61 +1,56 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.entity';
-import { Contact } from './contact.entity';
-import * as bcrypt from 'bcrypt';
+import { User } from '../TypeOrm/user.entity';
+import { CreateUserDto } from './create-user.dto';
 
 @Injectable()
 export class UserService {
 	constructor(
 		@InjectRepository(User)
 		private usersRepository: Repository<User>,
-		@InjectRepository(Contact)
-		private contactRepository: Repository<Contact>,
 	) { }
 
-	findUserByUsername(username: string): Promise<User | undefined> {
-		return this.usersRepository.findOne({ where: { username } });
+	// Fetch all users
+	async findAll(): Promise<User[]> {
+		return await this.usersRepository.find();
 	}
 
-	async getUserContacts(userId: number): Promise<Contact[]> {
-		const user = await this.usersRepository.findOne({ where: { id: userId }, relations: ['contacts'] });
-		return user.contacts;
-	}
-
-
-	async updateUserProfile(name: string, profilePictureUrl: string): Promise<User> {
-		const user = await this.findUserByUsername(name);
-		user.name = name;
-		user.profilePictureUrl = profilePictureUrl;
-		return this.usersRepository.save(user);
-	}
-
-	async addContact(userId: number, contactId: number): Promise<Contact> {
-		const user = await this.usersRepository.findOne({ where: { id: userId } });
-		const contact = await this.usersRepository.findOne({ where: { id: contactId } });
-		const newContact = this.contactRepository.create({ user, contact });
-		return this.contactRepository.save(newContact);
-	}
-
-	async removeContact(userId: number, contactId: number): Promise<void> {
-		const contact = await this.contactRepository.findOne({ where: { user: { id: userId }, contact: { id: contactId } } });
-		if (contact) {
-			await this.contactRepository.remove(contact);
-		}
-	}
-
-	async createUser(username: string, password: string): Promise<User> {
-		const hashedPassword = await bcrypt.hash(password, 10);
-		const newUser = this.usersRepository.create({ username, password: hashedPassword });
-		return this.usersRepository.save(newUser);
-	}
-
-	async validateUser(username: string, password: string): Promise<User> {
+	// Fetch a user by username
+	async findByUsername(username: string): Promise<User> {
 		const user = await this.usersRepository.findOne({ where: { username } });
-		if (user && await bcrypt.compare(password, user.password)) {
-			return user;
-		}
-		return null;
+		if (!user) throw new NotFoundException(`User with username ${username} not found`);
+		return user;
+	}
+
+	// Create a new user
+	async createUser(createUserDto: CreateUserDto): Promise<User> {
+		// Check if a user with the given email already exists
+		const userExists = await this.usersRepository.findOne({ where: { email: createUserDto.email } });
+		if (userExists) throw new NotFoundException(`User with email ${createUserDto.email} already exists`);
+		const user = this.usersRepository.create(createUserDto);
+		return await this.usersRepository.save(user);
+	}
+
+	// Fetch a user by ID
+	async findById(id: number): Promise<User> {
+		const user = await this.usersRepository.findOne({ where: { id } });
+		if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+		return user;
+	}
+
+	// Update a user by ID
+	async updateUser(id: number, attrs: Partial<User>): Promise<User> {
+		const user = await this.findById(id);
+		if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+		Object.assign(user, attrs);
+		return await this.usersRepository.save(user);
+	}
+
+	// Delete a user by ID
+	async deleteUser(id: number): Promise<User> {
+		const user = await this.findById(id);
+		if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+		return await this.usersRepository.remove(user);
 	}
 }
